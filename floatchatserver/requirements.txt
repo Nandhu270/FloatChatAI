@@ -1,0 +1,14 @@
+djangorestframework
+mysqlclient
+python-dotenv
+
+pandas
+numpy
+xarray
+netCDF4
+
+faiss-cpu
+
+sqlalchemy
+google-genai
+django-cors-headers

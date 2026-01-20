@@ -1,13 +1,21 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import MainLayout from "./layouts/MainLayout";
+import Home from "./pages/Home";
+import Dashboard from "./pages/Dashboard";
+import Chatbot from "./pages/Chatbot";
+import Visualization from "./pages/Visualization";
 
-function App() {
-
+export default function App() {
   return (
-    <>
-      <h1>Started Project</h1>
-      <h1>Started Project</h1>
-      <h1>Started Project</h1>
-    </>
-  )
+    <BrowserRouter>
+      <Routes>
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/chatbot" element={<Chatbot />} />
+          <Route path="/visualization" element={<Visualization />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
 }
-
-export default App
