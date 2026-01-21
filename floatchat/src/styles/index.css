@@ -1,5 +1,18 @@
+/* Import Tailwind v4 */
 @import "tailwindcss";
-html,
-body {
-  background-color: #020617;
+
+/* -------------------------------
+   Custom reusable classes
+   ------------------------------- */
+
+.input {
+  @apply w-full border rounded-lg px-4 py-3 mb-4
+         text-sm
+         focus:outline-none
+         focus:ring-2
+         focus:ring-black;
+}
+
+.error {
+  @apply text-red-500 text-sm mb-2;
 }
