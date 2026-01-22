@@ -1,18 +1,3 @@
-// import { BrowserRouter, Routes, Route } from "react-router-dom";
-// import Chatbot from "./pages/Chatbot";
-
-// export default function App() {
-//   return (
-//     <BrowserRouter>
-//       <Routes>
-//         <Route path="/" element={<Chatbot />} />
-//       </Routes>
-//     </BrowserRouter>
-//   );
-// }
-
-
-
 import { useEffect, useState } from "react";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";

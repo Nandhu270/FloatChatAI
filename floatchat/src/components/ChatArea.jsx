@@ -1,34 +1,107 @@
 import { useState, useRef, useEffect } from "react";
 import { FiMenu, FiSend, FiMap } from "react-icons/fi";
+import { FiUser } from "react-icons/fi";
+import { RiRobot2Line } from "react-icons/ri";
 
 export default function ChatArea({
   sidebarOpen,
   onOpenSidebar,
   mapOpen,
   onToggleMap,
+  selectedLocation,
 }) {
   const [messages, setMessages] = useState([
-    { role: "bot", text: "Hello! How can I help you today?" },
+    {
+      role: "bot",
+      text: "Hello! How can I help you today?",
+      time: new Date(),
+    },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
   const bottomRef = useRef(null);
+  const textareaRef = useRef(null);
+  const MAX_HEIGHT = 160;
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
+  const autoResize = () => {
+    const el = textareaRef.current;
+    if (!el) return;
 
-    setMessages((prev) => [...prev, { role: "user", text: input.trim() }]);
+    el.style.height = "auto"; // reset first
+    const newHeight = Math.min(el.scrollHeight, MAX_HEIGHT);
+    el.style.height = `${newHeight}px`;
+  };
+
+  useEffect(() => {
+    if (!selectedLocation) return;
+
+    const text = `lat ${selectedLocation.lat.toFixed(
+      6,
+    )}, lon ${selectedLocation.lng.toFixed(6)}`;
+
+    setInput(text);
+
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = `${Math.min(
+          textareaRef.current.scrollHeight,
+          160,
+        )}px`;
+      }
+    });
+  }, [selectedLocation]);
+
+  /* ---------------- SEND MESSAGE ---------------- */
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+
+    const userText = input.trim();
+
+    // User message
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        text: userText,
+        time: new Date(),
+      },
+    ]);
+
     setInput("");
     setLoading(true);
 
-    // Mock async response (backend-ready)
-    setTimeout(() => {
-      setLoading(false);
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+    });
+
+    try {
+      // 🔌 BACKEND READY (mock for now)
+      await new Promise((res) => setTimeout(res, 1200));
+
       setMessages((prev) => [
         ...prev,
-        { role: "bot", text: "This is a mock response." },
+        {
+          role: "bot",
+          text: "This is a mock response from the assistant.",
+          time: new Date(),
+        },
       ]);
-    }, 1200);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "bot",
+          text: "Something went wrong. Please try again.",
+          time: new Date(),
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -38,65 +111,95 @@ export default function ChatArea({
     }
   };
 
-  // Auto-scroll
+  /* ---------------- AUTO SCROLL ---------------- */
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
   return (
-    <div className="flex flex-col flex-1 bg-[#f5f3ee]">
+    <div className="flex flex-col h-full min-h-0 bg-[#f5f3ee]">
       {/* Header */}
-      <div className="h-14 flex items-center px-4 gap-4 bg-[#efede6]">
+      <div className="h-14 shrink-0 flex items-center px-4 gap-4 bg-[#efede6]">
         {!sidebarOpen && (
-          <button
-            onClick={onOpenSidebar}
-            className="text-gray-700 hover:text-black cursor-pointer"
-            title="Open sidebar"
-          >
+          <button onClick={onOpenSidebar} className="cursor-pointer">
             <FiMenu size={20} />
           </button>
         )}
 
-        <h2 className="font-semibold text-sm flex-1">Float Assistant</h2>
+        <h2 className="text-sm font-semibold flex-1">Float Assistant</h2>
 
-        {/* MAP TOGGLE BUTTON */}
         <button
           onClick={onToggleMap}
-          className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg shadow-sm text-sm hover:bg-gray-100 cursor-pointer"
+          className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg shadow-sm text-sm cursor-pointer"
         >
           <FiMap size={16} />
-          <span>{mapOpen ? "Close Map" : "Map"}</span>
+          {mapOpen ? "Close Map" : "Open Map"}
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {messages.map((m, idx) => (
-          <div
-            key={idx}
-            className={`flex ${
-              m.role === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
-            <div
-              className={`max-w-[70%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                m.role === "user"
-                  ? "bg-black text-white rounded-br-sm"
-                  : "bg-white text-gray-800 rounded-bl-sm shadow-sm"
-              }`}
-            >
-              {m.text}
-            </div>
-          </div>
-        ))}
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-6">
+        {messages.map((m, idx) => {
+          const isUser = m.role === "user";
 
-        {/* Typing Animation (PURE CSS, NO ASSETS) */}
+          return (
+            <div
+              key={idx}
+              className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+            >
+              {/* BOT ICON */}
+              {!isUser && (
+                <div className="mr-3 mt-1">
+                  <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-700">
+                    <RiRobot2Line size={18} />
+                  </div>
+                </div>
+              )}
+
+              {/* MESSAGE + TIME */}
+              <div
+                className={`flex flex-col ${
+                  isUser ? "items-end" : "items-start"
+                }`}
+              >
+                <div
+                  className={`px-4 py-3 rounded-2xl text-sm max-w-[420px] leading-relaxed ${
+                    isUser
+                      ? "bg-black text-white rounded-br-sm"
+                      : "bg-white text-gray-800 rounded-bl-sm"
+                  }`}
+                >
+                  {m.text}
+                </div>
+
+                <span className="text-xs text-gray-500 mt-1">
+                  {m.time.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+
+              {/* USER ICON */}
+              {isUser && (
+                <div className="ml-3 mt-1">
+                  <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center">
+                    <FiUser size={16} />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* TYPING INDICATOR */}
         {loading && (
-          <div className="flex justify-start">
-            <div className="bg-white px-4 py-3 rounded-2xl shadow-sm flex items-center gap-1">
-              <span className="dot" />
-              <span className="dot delay-1" />
-              <span className="dot delay-2" />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-700">
+              <RiRobot2Line size={18} />
+            </div>
+            <div className="bg-white px-4 py-2 rounded-2xl text-sm text-gray-600">
+              AI is Thinking...
             </div>
           </div>
         )}
@@ -104,28 +207,37 @@ export default function ChatArea({
         <div ref={bottomRef} />
       </div>
 
-      {/* Input Area (NO BORDER, FLOATING UI) */}
-      <div className="px-4 pb-4">
+      {/* Input */}
+      <div className="shrink-0 px-4 pb-4">
         <div className="flex items-end gap-2 bg-white rounded-2xl px-4 py-3 shadow-md">
           <textarea
-            className="flex-1 resize-none outline-none text-sm bg-transparent max-h-32"
-            rows={1}
+            ref={textareaRef}
+            className="flex-1 resize-none outline-none text-sm bg-transparent overflow-y-auto"
             placeholder="Type a message…"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            rows={1}
+            onChange={(e) => {
+              setInput(e.target.value);
+              autoResize();
+            }}
+            onPaste={() => {
+              requestAnimationFrame(autoResize);
+            }}
             onKeyDown={handleKeyDown}
+            disabled={loading}
           />
+
           <button
             onClick={sendMessage}
-            className="text-black hover:text-gray-600 cursor-pointer"
-            title="Send"
+            disabled={loading}
+            className="text-black hover:text-gray-600 disabled:opacity-50 cursor-pointer"
           >
             <FiSend size={18} />
           </button>
         </div>
       </div>
 
-      {/* Inline CSS for typing animation */}
+      {/* Typing animation */}
       <style>
         {`
           .dot {
@@ -135,12 +247,8 @@ export default function ChatArea({
             border-radius: 50%;
             animation: blink 1.4s infinite both;
           }
-          .delay-1 {
-            animation-delay: 0.2s;
-          }
-          .delay-2 {
-            animation-delay: 0.4s;
-          }
+          .delay-1 { animation-delay: 0.2s; }
+          .delay-2 { animation-delay: 0.4s; }
           @keyframes blink {
             0% { opacity: 0.2; }
             20% { opacity: 1; }

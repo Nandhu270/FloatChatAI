@@ -1,9 +1,4 @@
-/* Import Tailwind v4 */
 @import "tailwindcss";
-
-/* -------------------------------
-   Custom reusable classes
-   ------------------------------- */
 
 .input {
   @apply w-full border rounded-lg px-4 py-3 mb-4
