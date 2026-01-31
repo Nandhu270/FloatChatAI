@@ -54,12 +54,61 @@ export default function ChatArea({
   }, [selectedLocation]);
 
   /* ---------------- SEND MESSAGE ---------------- */
+  // const sendMessage = async () => {
+  //   if (!input.trim() || loading) return;
+
+  //   const userText = input.trim();
+
+  //   // User message
+  //   setMessages((prev) => [
+  //     ...prev,
+  //     {
+  //       role: "user",
+  //       text: userText,
+  //       time: new Date(),
+  //     },
+  //   ]);
+
+  //   setInput("");
+  //   setLoading(true);
+
+  //   requestAnimationFrame(() => {
+  //     if (textareaRef.current) {
+  //       textareaRef.current.style.height = "auto";
+  //     }
+  //   });
+
+  //   try {
+  //     // 🔌 BACKEND READY (mock for now)
+  //     await new Promise((res) => setTimeout(res, 1200));
+
+  //     setMessages((prev) => [
+  //       ...prev,
+  //       {
+  //         role: "bot",
+  //         text: "This is a mock response from the assistant.",
+  //         time: new Date(),
+  //       },
+  //     ]);
+  //   } catch {
+  //     setMessages((prev) => [
+  //       ...prev,
+  //       {
+  //         role: "bot",
+  //         text: "Something went wrong. Please try again.",
+  //         time: new Date(),
+  //       },
+  //     ]);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
     const userText = input.trim();
 
-    // User message
+    // push user message
     setMessages((prev) => [
       ...prev,
       {
@@ -72,30 +121,58 @@ export default function ChatArea({
     setInput("");
     setLoading(true);
 
-    requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
-    });
-
     try {
-      // 🔌 BACKEND READY (mock for now)
-      await new Promise((res) => setTimeout(res, 1200));
+      // ⚠️ lat/lon handling
+      const lat = selectedLocation?.lat;
+      const lon = selectedLocation?.lng;
 
+      if (lat === undefined || lon === undefined) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            text: "Please select a location on the map first.",
+            time: new Date(),
+          },
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      // 🔌 REAL BACKEND CALL
+      const res = await fetch("http://localhost:8000/api/chat/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: userText,
+          lat,
+          lon,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Backend error");
+      }
+
+      const data = await res.json();
+
+      // push bot reply
       setMessages((prev) => [
         ...prev,
         {
           role: "bot",
-          text: "This is a mock response from the assistant.",
+          text: data.reply || "No response from server.",
           time: new Date(),
         },
       ]);
-    } catch {
+    } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           role: "bot",
-          text: "Something went wrong. Please try again.",
+          text: "Server error. Please try again later.",
           time: new Date(),
         },
       ]);
