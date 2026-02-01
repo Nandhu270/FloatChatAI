@@ -1,79 +1,247 @@
 import json
-from datetime import datetime, timedelta
+from math import sqrt
+from datetime import date
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from erddap.catalog import ERDDAP_DATASETS
-from erddap.client import fetch_erddap
+from chat.services.location import classify_location
+from chat.services.date import resolve_dates
+from chat.services.gemini import summarize_with_gemini
+from chat.services.prompt_builder import build_summary_prompt
 
-from chat.services.geo_rules import classify_location
-from chat.services.rama_grid import nearest_rama
-from chat.services.gemini import ask_gemini
-from chat.services.rag import retrieve
+from erddap.client import fetch
+from erddap.catalog import ERDDAP_DAILY, ERDDAP_5DAY
+
+
+# -------------------------------------------------
+# Dataset last available dates (from ERDDAP metadata)
+# -------------------------------------------------
+DATASET_LAST_DATE = {
+    "daily": date(2025, 12, 2),
+    "5day": date(2025, 6, 29),
+}
+
+
+# -------------------------------------------------
+# Known RAMA buoy locations (Indian Ocean subset)
+# -------------------------------------------------
+RAMA_BUOYS = [
+    (12.0, 67.0),   # Central Arabian Sea
+    (8.0, 67.0),    # South Arabian Sea
+    (10.0, 75.0),   # Lakshadweep Sea
+    (15.0, 90.0),   # Bay of Bengal
+    (0.0, 90.0),    # Equatorial Indian Ocean
+    (-1.5, 80.5),   # South Indian Ocean
+    (5.0, 95.0),    # Eastern Bay of Bengal
+]
+
+
+# -------------------------------------------------
+# Nearest RAMA buoy (true KNN on buoy registry)
+# -------------------------------------------------
+def nearest_rama_buoy(lat, lon):
+    return min(
+        RAMA_BUOYS,
+        key=lambda p: sqrt((p[0] - lat) ** 2 + (p[1] - lon) ** 2),
+    )
+
 
 @csrf_exempt
 def chat_api(request):
-    body = json.loads(request.body)
-    lat, lon = float(body["lat"]), float(body["lon"])
-    message = body["message"]
+    # -------------------------------------------------
+    # 1. INPUT VALIDATION
+    # -------------------------------------------------
+    try:
+        body = json.loads(request.body)
+        lat = float(body["latitude"])
+        lon = float(body["longitude"])
+        user_date = body.get("date")
+    except Exception:
+        return JsonResponse(
+            {"error": "Latitude and longitude are required."},
+            status=400,
+        )
 
-    loc = classify_location(lat, lon)
+    # -------------------------------------------------
+    # 2. DATE VALIDATION (60-DAY RULE)
+    # -------------------------------------------------
+    date_used, start_date, date_ok = resolve_dates(user_date)
+    if not date_ok:
+        return JsonResponse(
+            {
+                "input": {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "date_used": user_date,
+                    "analysis_range": "N/A",
+                },
+                "location_status": {
+                    "region": "Indian Waters",
+                    "description": "No data available. Date is outside the permitted 60-day range.",
+                },
+                "ocean_data_summary": {
+                    "parameters_analyzed": [],
+                    "key_insights": [],
+                },
+                "data_confidence": "Low",
+            }
+        )
 
-    # RULE 1: LAND
-    if loc["type"] == "land":
-        return JsonResponse({
-            "reply": f"The given coordinates fall on land in {loc['place']}."
-        })
+    # -------------------------------------------------
+    # 3. LOCATION CLASSIFICATION
+    # -------------------------------------------------
+    region, description = classify_location(lat, lon)
 
+    if region in ("Land", "Outside India"):
+        return JsonResponse(
+            {
+                "input": {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "date_used": str(date_used),
+                    "analysis_range": f"{start_date} to {date_used}",
+                },
+                "location_status": {
+                    "region": region,
+                    "description": description,
+                },
+                "ocean_data_summary": {
+                    "parameters_analyzed": [],
+                    "key_insights": [],
+                },
+                "data_confidence": "High",
+            }
+        )
 
-    # RULE 2: OUTSIDE INDIAN WATERS
-    if loc["type"] == "other_ocean":
-        return JsonResponse({
-            "reply": "This location lies in ocean waters outside the Indian Ocean RAMA observation domain. No data is available for this region."
-        })
+    # -------------------------------------------------
+    # 4. CLAMP DATE WINDOWS
+    # -------------------------------------------------
+    daily_end = min(date_used, DATASET_LAST_DATE["daily"])
+    daily_start = min(start_date, daily_end)
 
-    # RULE 3 & 4: INDIAN WATERS
-    lat_n, lon_n = nearest_rama(lat, lon)
+    five_end = min(date_used, DATASET_LAST_DATE["5day"])
+    five_start = min(start_date, five_end)
 
-    end = datetime.utcnow() - timedelta(days=10)
-    start = end - timedelta(days=5)
+    # -------------------------------------------------
+    # 5. DATA FETCH USING REAL RAMA BUOYS
+    # -------------------------------------------------
+    facts = {}
+    parameters_analyzed = []
+    available_count = 0
+    resolution_used = set()
 
-    summaries = []
-    for key, meta in ERDDAP_DATASETS.items():
-        dataset, vars_ = meta["5day"]
-        df = fetch_erddap(dataset, vars_, lat_n, lon_n, start.isoformat(), end.isoformat())
+    nearest_lat, nearest_lon = nearest_rama_buoy(lat, lon)
+
+    for param in ERDDAP_DAILY.keys():
+        parameters_analyzed.append(param)
+
+        # ===============================
+        # TRY DAILY AT EXACT LOCATION
+        # ===============================
+        daily_dataset, daily_vars = ERDDAP_DAILY[param]
+        df = fetch(
+            daily_dataset,
+            daily_vars,
+            lat,
+            lon,
+            daily_start,
+            daily_end,
+        )
+
         if not df.empty:
-            summaries.append(f"{meta['label']}: {len(df)} records")
+            facts[param] = "Exact location data available (daily resolution)"
+            available_count += 1
+            resolution_used.add("daily")
+            continue
 
-    if not summaries:
-        return JsonResponse({
-            "reply": f"No RAMA observations found near this location. Nearest checked point was {lat_n}°N, {lon_n}°E."
-        })
+        # ===============================
+        # TRY DAILY AT NEAREST RAMA BUOY
+        # ===============================
+        df_near = fetch(
+            daily_dataset,
+            daily_vars,
+            nearest_lat,
+            nearest_lon,
+            daily_start,
+            daily_end,
+        )
 
-    rag_context = "\n".join(retrieve(message))
+        if not df_near.empty:
+            facts[param] = "Nearest RAMA buoy data used (daily resolution)"
+            available_count += 1
+            resolution_used.add("daily")
+            continue
 
-    prompt = f"""
-    You are an oceanographic assistant.
+        # ===============================
+        # FALLBACK TO 5-DAY AT NEAREST BUOY
+        # ===============================
+        five_dataset, five_vars = ERDDAP_5DAY[param]
+        df5 = fetch(
+            five_dataset,
+            five_vars,
+            nearest_lat,
+            nearest_lon,
+            five_start,
+            five_end,
+        )
 
-    Background knowledge:
-    {rag_context}
+        if not df5.empty:
+            facts[param] = "Nearest RAMA buoy data used (5-day resolution)"
+            available_count += 1
+            resolution_used.add("5-day")
+        else:
+            facts[param] = "Data not available"
 
-    User question:
-    {message}
+    # -------------------------------------------------
+    # 6. GEMINI SUMMARY (FACTS ONLY)
+    # -------------------------------------------------
+    summary_prompt = build_summary_prompt(facts)
+    summary_text = summarize_with_gemini(summary_prompt)
 
-    Nearest RAMA location used:
-    {lat_n}°N, {lon_n}°E
+    key_insights = [
+        line.strip("- ").strip()
+        for line in summary_text.split("\n")
+        if line.strip()
+    ]
 
-    Available data:
-    {chr(10).join(summaries)}
+    # -------------------------------------------------
+    # 7. CONFIDENCE SCORE
+    # -------------------------------------------------
+    if available_count >= 6:
+        confidence = "High"
+    elif available_count >= 3:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
 
-    Explain scientifically and clearly.
-    """
+    # -------------------------------------------------
+    # 8. HONEST ANALYSIS RANGE
+    # -------------------------------------------------
+    actual_start = min(daily_start, five_start)
+    actual_end = max(daily_end, five_end)
 
-    reply = ask_gemini(prompt)
-
-    return JsonResponse({
-        "reply": reply,
-        "used_lat": lat_n,
-        "used_lon": lon_n,
-    })
+    # -------------------------------------------------
+    # 9. FINAL RESPONSE
+    # -------------------------------------------------
+    return JsonResponse(
+        {
+            "input": {
+                "latitude": lat,
+                "longitude": lon,
+                "date_used": str(date_used),
+                "analysis_range": f"{actual_start} to {actual_end}",
+            },
+            "location_status": {
+                "region": "Indian Waters",
+                "description": (
+                    f"Nearest RAMA buoy used at "
+                    f"{nearest_lat}°N, {nearest_lon}°E when exact data was unavailable."
+                ),
+            },
+            "ocean_data_summary": {
+                "parameters_analyzed": parameters_analyzed,
+                "key_insights": key_insights,
+            },
+            "data_confidence": confidence,
+        }
+    )

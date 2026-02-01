@@ -3,23 +3,32 @@ import pandas as pd
 
 BASE = "https://coastwatch.pfeg.noaa.gov/erddap/tabledap"
 
-def fetch_erddap(dataset, variables, lat, lon, start, end):
-    cols = ",".join(["time","latitude","longitude","depth"] + variables)
+def fetch(dataset, variables, lat, lon, start_date, end_date):
+    vars_all = ["time", "latitude", "longitude"] + variables
+    var_str = ",".join(vars_all)
 
     url = (
         f"{BASE}/{dataset}.json?"
-        f"{cols}"
-        f"&latitude>={lat-0.5}&latitude<={lat+0.5}"
-        f"&longitude>={lon-0.5}&longitude<={lon+0.5}"
-        f"&time>={start}&time<={end}"
+        f"{var_str}"
+        f"&latitude>={lat-1}&latitude<={lat+1}"
+        f"&longitude>={lon-1}&longitude<={lon+1}"
+        f"&time>={start_date}&time<={end_date}"
         f"&array=\"RAMA\""
     )
 
-    r = requests.get(url, timeout=30)
+    try:
+        r = requests.get(url, timeout=10)
+        if r.status_code != 200:
+            return pd.DataFrame()
 
-    if r.status_code == 404:
+        data = r.json()
+        if "table" not in data or "rows" not in data["table"]:
+            return pd.DataFrame()
+
+        rows = data["table"]["rows"]
+        cols = data["table"]["columnNames"]
+
+        return pd.DataFrame(rows, columns=cols)
+
+    except Exception:
         return pd.DataFrame()
-
-    r.raise_for_status()
-    table = r.json()["table"]
-    return pd.DataFrame(table["rows"], columns=table["columnNames"])

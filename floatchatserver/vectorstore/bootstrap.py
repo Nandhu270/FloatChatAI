@@ -1,8 +1,8 @@
 from vectorstore.store import add_doc
 
 def bootstrap_rag():
-    add_doc("RAMA buoys are sparsely distributed; nearest-neighbor approximation is standard.")
-    add_doc("ERDDAP returns 404 when no data matches query constraints.")
-    add_doc("SST (T_25) represents near-surface ocean temperature.")
-    add_doc("Salinity (S_41) is measured in PSU and indicates freshwater influence.")
-
+    add_doc("Indian EEZ extends up to 200 nautical miles from the baseline.")
+    add_doc("RAMA buoys are sparsely distributed; nearest-neighbor sampling is standard.")
+    add_doc("Sea surface temperature indicates upper-ocean thermal conditions.")
+    add_doc("Salinity reflects freshwater flux and evaporation balance.")
+    add_doc("Ocean currents describe horizontal water movement.")

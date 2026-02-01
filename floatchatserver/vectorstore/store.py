@@ -1,18 +1,19 @@
-import faiss, numpy as np
+import faiss
+import numpy as np
 from sentence_transformers import SentenceTransformer
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
-index = faiss.IndexFlatL2(384)
-docs = []
+_model = SentenceTransformer("all-MiniLM-L6-v2")
+_index = faiss.IndexFlatL2(384)
+_docs = []
 
 def add_doc(text):
-    emb = model.encode([text])
-    index.add(np.array(emb))
-    docs.append(text)
+    emb = _model.encode([text])
+    _index.add(np.array(emb))
+    _docs.append(text)
 
-def retrieve(query, k=3):
-    if index.ntotal == 0:
+def retrieve(query, k=5):
+    if _index.ntotal == 0:
         return []
-    q = model.encode([query])
-    _, idx = index.search(np.array(q), k)
-    return [docs[i] for i in idx[0]]
+    q = _model.encode([query])
+    _, idx = _index.search(np.array(q), k)
+    return [_docs[i] for i in idx[0]]

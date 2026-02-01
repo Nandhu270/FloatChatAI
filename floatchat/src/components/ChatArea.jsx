@@ -103,6 +103,122 @@ export default function ChatArea({
   //     setLoading(false);
   //   }
   // };
+
+  const formatBackendResponse = (data) => {
+    if (!data || !data.location_status) {
+      return "No data available.";
+    }
+
+    let text = "";
+
+    text += `📍 ${data.location_status.region}\n`;
+    text += `${data.location_status.description}\n\n`;
+
+    if (data.input?.analysis_range) {
+      text += `🗓 Analysis Range:\n${data.input.analysis_range}\n\n`;
+    }
+
+    if (data.ocean_data_summary?.parameters_analyzed?.length) {
+      text += `🌊 Parameters Analyzed:\n`;
+      data.ocean_data_summary.parameters_analyzed.forEach((p) => {
+        text += `• ${p.replaceAll("_", " ")}\n`;
+      });
+      text += "\n";
+    }
+
+    if (data.ocean_data_summary?.key_insights?.length) {
+      text += `🔍 Key Insights:\n`;
+      data.ocean_data_summary.key_insights.forEach((i) => {
+        text += `• ${i}\n`;
+      });
+      text += "\n";
+    }
+
+    if (data.data_confidence) {
+      text += `📊 Data Confidence: ${data.data_confidence}`;
+    }
+
+    return text.trim();
+  };
+
+  // const sendMessage = async () => {
+  //   if (!input.trim() || loading) return;
+
+  //   const userText = input.trim();
+
+  //   // push user message
+  //   setMessages((prev) => [
+  //     ...prev,
+  //     {
+  //       role: "user",
+  //       text: userText,
+  //       time: new Date(),
+  //     },
+  //   ]);
+
+  //   setInput("");
+  //   setLoading(true);
+
+  //   try {
+  //     // ⚠️ lat/lon handling
+  //     const lat = selectedLocation?.lat;
+  //     const lon = selectedLocation?.lng;
+
+  //     if (lat === undefined || lon === undefined) {
+  //       setMessages((prev) => [
+  //         ...prev,
+  //         {
+  //           role: "bot",
+  //           text: "Please select a location on the map first.",
+  //           time: new Date(),
+  //         },
+  //       ]);
+  //       setLoading(false);
+  //       return;
+  //     }
+
+  //     // 🔌 REAL BACKEND CALL
+  //     const res = await fetch("http://localhost:8000/api/chat/", {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify({
+  //         message: userText,
+  //         lat,
+  //         lon,
+  //       }),
+  //     });
+
+  //     if (!res.ok) {
+  //       throw new Error("Backend error");
+  //     }
+
+  //     const data = await res.json();
+
+  //     // push bot reply
+  //     setMessages((prev) => [
+  //       ...prev,
+  //       {
+  //         role: "bot",
+  //         text: data.reply || "No response from server.",
+  //         time: new Date(),
+  //       },
+  //     ]);
+  //   } catch (err) {
+  //     setMessages((prev) => [
+  //       ...prev,
+  //       {
+  //         role: "bot",
+  //         text: "Server error. Please try again later.",
+  //         time: new Date(),
+  //       },
+  //     ]);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
@@ -122,7 +238,6 @@ export default function ChatArea({
     setLoading(true);
 
     try {
-      // ⚠️ lat/lon handling
       const lat = selectedLocation?.lat;
       const lon = selectedLocation?.lng;
 
@@ -139,16 +254,16 @@ export default function ChatArea({
         return;
       }
 
-      // 🔌 REAL BACKEND CALL
+      // 🔌 BACKEND CALL (payload fixed)
       const res = await fetch("http://localhost:8000/api/chat/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: userText,
-          lat,
-          lon,
+          latitude: lat,
+          longitude: lon,
+          // date: "YYYY-MM-DD" // optional later
         }),
       });
 
@@ -158,12 +273,14 @@ export default function ChatArea({
 
       const data = await res.json();
 
-      // push bot reply
+      // ✅ FORMAT STRUCTURED RESPONSE
+      const formattedText = formatBackendResponse(data);
+
       setMessages((prev) => [
         ...prev,
         {
           role: "bot",
-          text: data.reply || "No response from server.",
+          text: formattedText,
           time: new Date(),
         },
       ]);

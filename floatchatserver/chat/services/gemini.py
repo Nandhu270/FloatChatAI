@@ -1,12 +1,14 @@
-import google.generativeai as genai
 import os
+import google.generativeai as genai
 
-# configure once
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# ✅ STABLE MODEL (v1beta compatible)
-model = genai.GenerativeModel("gemini-3-flash-preview")
+MODEL = "gemini-3-flash-preview"
 
-def ask_gemini(prompt):
-    response = model.generate_content(prompt)
-    return response.text
+def summarize_with_gemini(prompt):
+    try:
+        model = genai.GenerativeModel(MODEL)
+        res = model.generate_content(prompt)
+        return res.text.strip()
+    except Exception:
+        return "Data available but could not be summarized."
