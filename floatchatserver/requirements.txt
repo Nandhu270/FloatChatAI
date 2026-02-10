@@ -5,4 +5,7 @@ pandas
 numpy
 faiss-cpu
 sentence-transformers
-google-generativeai
+google-genai
+djangorestframework
+django-cors-headers
+mysqlclient

@@ -104,192 +104,45 @@ export default function ChatArea({
   //   }
   // };
 
-  const formatBackendResponse = (data) => {
-    if (!data || !data.location_status) {
-      return "No data available.";
-    }
-
-    let text = "";
-
-    text += `📍 ${data.location_status.region}\n`;
-    text += `${data.location_status.description}\n\n`;
-
-    if (data.input?.analysis_range) {
-      text += `🗓 Analysis Range:\n${data.input.analysis_range}\n\n`;
-    }
-
-    if (data.ocean_data_summary?.parameters_analyzed?.length) {
-      text += `🌊 Parameters Analyzed:\n`;
-      data.ocean_data_summary.parameters_analyzed.forEach((p) => {
-        text += `• ${p.replaceAll("_", " ")}\n`;
-      });
-      text += "\n";
-    }
-
-    if (data.ocean_data_summary?.key_insights?.length) {
-      text += `🔍 Key Insights:\n`;
-      data.ocean_data_summary.key_insights.forEach((i) => {
-        text += `• ${i}\n`;
-      });
-      text += "\n";
-    }
-
-    if (data.data_confidence) {
-      text += `📊 Data Confidence: ${data.data_confidence}`;
-    }
-
-    return text.trim();
-  };
-
-  // const sendMessage = async () => {
-  //   if (!input.trim() || loading) return;
-
-  //   const userText = input.trim();
-
-  //   // push user message
-  //   setMessages((prev) => [
-  //     ...prev,
-  //     {
-  //       role: "user",
-  //       text: userText,
-  //       time: new Date(),
-  //     },
-  //   ]);
-
-  //   setInput("");
-  //   setLoading(true);
-
-  //   try {
-  //     // ⚠️ lat/lon handling
-  //     const lat = selectedLocation?.lat;
-  //     const lon = selectedLocation?.lng;
-
-  //     if (lat === undefined || lon === undefined) {
-  //       setMessages((prev) => [
-  //         ...prev,
-  //         {
-  //           role: "bot",
-  //           text: "Please select a location on the map first.",
-  //           time: new Date(),
-  //         },
-  //       ]);
-  //       setLoading(false);
-  //       return;
-  //     }
-
-  //     // 🔌 REAL BACKEND CALL
-  //     const res = await fetch("http://localhost:8000/api/chat/", {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //       body: JSON.stringify({
-  //         message: userText,
-  //         lat,
-  //         lon,
-  //       }),
-  //     });
-
-  //     if (!res.ok) {
-  //       throw new Error("Backend error");
-  //     }
-
-  //     const data = await res.json();
-
-  //     // push bot reply
-  //     setMessages((prev) => [
-  //       ...prev,
-  //       {
-  //         role: "bot",
-  //         text: data.reply || "No response from server.",
-  //         time: new Date(),
-  //       },
-  //     ]);
-  //   } catch (err) {
-  //     setMessages((prev) => [
-  //       ...prev,
-  //       {
-  //         role: "bot",
-  //         text: "Server error. Please try again later.",
-  //         time: new Date(),
-  //       },
-  //     ]);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
     const userText = input.trim();
 
-    // push user message
     setMessages((prev) => [
       ...prev,
-      {
-        role: "user",
-        text: userText,
-        time: new Date(),
-      },
+      { role: "user", text: userText, time: new Date() },
     ]);
 
     setInput("");
     setLoading(true);
 
     try {
-      const lat = selectedLocation?.lat;
-      const lon = selectedLocation?.lng;
-
-      if (lat === undefined || lon === undefined) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "bot",
-            text: "Please select a location on the map first.",
-            time: new Date(),
-          },
-        ]);
-        setLoading(false);
-        return;
-      }
-
-      // 🔌 BACKEND CALL (payload fixed)
       const res = await fetch("http://localhost:8000/api/chat/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          latitude: lat,
-          longitude: lon,
-          // date: "YYYY-MM-DD" // optional later
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userText }),
       });
-
-      if (!res.ok) {
-        throw new Error("Backend error");
-      }
 
       const data = await res.json();
 
-      // ✅ FORMAT STRUCTURED RESPONSE
-      const formattedText = formatBackendResponse(data);
+      const botText =
+        data.reply ||
+        data.summary ||
+        data.content ||
+        data.error ||
+        "No response generated.";
 
       setMessages((prev) => [
         ...prev,
-        {
-          role: "bot",
-          text: formattedText,
-          time: new Date(),
-        },
+        { role: "bot", text: botText, time: new Date() },
       ]);
-    } catch (err) {
+    } catch (e) {
       setMessages((prev) => [
         ...prev,
         {
           role: "bot",
-          text: "Server error. Please try again later.",
+          text: "Backend unreachable. Check server.",
           time: new Date(),
         },
       ]);
@@ -297,6 +150,7 @@ export default function ChatArea({
       setLoading(false);
     }
   };
+
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -352,16 +206,14 @@ export default function ChatArea({
 
               {/* MESSAGE + TIME */}
               <div
-                className={`flex flex-col ${
-                  isUser ? "items-end" : "items-start"
-                }`}
+                className={`flex flex-col ${isUser ? "items-end" : "items-start"
+                  }`}
               >
                 <div
-                  className={`px-4 py-3 rounded-2xl text-sm max-w-[420px] leading-relaxed ${
-                    isUser
+                  className={`px-4 py-3 rounded-2xl text-sm max-w-[420px] leading-relaxed ${isUser
                       ? "bg-black text-white rounded-br-sm"
                       : "bg-white text-gray-800 rounded-bl-sm"
-                  }`}
+                    }`}
                 >
                   {m.text}
                 </div>

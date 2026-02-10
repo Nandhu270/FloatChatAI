@@ -1,18 +1,21 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime
 
-def resolve_dates(user_date):
-    today = datetime.utcnow().date()
-    start = today - timedelta(days=60)
+def resolve_dates(date_str):
+    """
+    Resolve user-provided date.
+    If missing or invalid → default to today.
+    Returns (resolved_date, is_future_relative_to_today)
+    """
 
-    if user_date:
+    if date_str:
         try:
-            d = datetime.fromisoformat(user_date).date()
-        except Exception:
-            return None, None, False
+            resolved = datetime.fromisoformat(date_str).date()
+        except ValueError:
+            resolved = date.today()
+    else:
+        resolved = date.today()
 
-        if d < start or d > today:
-            return None, None, False
+    today = date.today()
+    is_future = resolved > today
 
-        return d, start, True
-
-    return today, start, True
+    return resolved, is_future
